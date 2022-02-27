@@ -1,208 +1,209 @@
-export default class Heap<T> {
-    _list: (T | undefined)[];
-    _nextLeafIndex: number;
+type HeapKV<K, V> = {
+    key: K;
+    value: V;
+};
 
-    _comparator: (a: T, b: T) => number;
-    _initialCapacity: number;
-    _canGrow: boolean;
+type HeapComparator<K> = (key1: K, k2: K) => number;
 
-    /**
-     * 
-     * @param comparator Function returns a value:
-     *                      > 0 to sort b before a
-     *                      < 0 to sort a before b
-     *                      == 0 for same value:
-     *                          In this case, if the heap is full and == 0 is returned, then
-     *                          the new value will be discarded
-     * @param capacity 
-     * @param canGrow 
-     */
-    constructor(comparator: (a: T, b: T) => number, capacity: number, canGrow: boolean = false) {
-        this._list = new Array(capacity);
-        this._nextLeafIndex = 0;
-        this._comparator = comparator;
+export type Heap<K, V> = {
+    push: (kv: HeapKV<K, V>) => boolean;
+    pop: () => V | undefined;
 
-        this._initialCapacity = capacity;
-        this._canGrow = canGrow;
+    empty: () => boolean;
+    hasSpace: () => boolean;
+    capacity: () => number;
+    getListCopy: () => HeapKV<K, V>[];
+    count: () => number;
+};
+
+export function createHeap<K, V> (comparator: HeapComparator<K>, initialSize: number, canGrow: boolean): Heap<K, V> {
+    let _initialCapacity = initialSize;
+
+    let _list: HeapKV<K, V>[] = new Array(initialSize);
+
+    let _nextEmptyIndex: number = 0;
+
+    const push = (kv: HeapKV<K, V>): boolean => {
+        // 1. If does not have space for more items, try to grow the _list
+        if(!hasSpace()) {
+            const grew: boolean = grow();
+            if(!grew) return false;
+        }
+
+        // 2. Assign new value to leftmost leaf
+        const assignedIndex: number = _assignLMLeaf(kv);
+
+        // 3. Bubble up
+        _bubbleUp(assignedIndex);
     }
 
-    size(): number {
-        return this._list.length;
+    const pop = (): V => {
+        if(empty()) return undefined;
+
+        // 1. Record, then delete root
+        const root: HeapKV<K, V> = _list[0];
+        delete _list[0];
+
+        // 2. Get leftmost leaf node
+        const lmLeafNode: HeapKV<K, V> = _pluckLMLeaf();
+
+        // 3. Replace root with leftmost leaf node
+        _list[0] = lmLeafNode;
+
+        // 4. Trickle down
+        _trickleDown(0);
+
+        _cleanHeap();
+
+        return root.value;
     }
 
-    hasSpace(): boolean {
-        return this._nextLeafIndex < this.size();
-    }
+    const getListCopy = () => _list.slice();
 
-    /**
-     * 
-     * @param a 
-     * @param b 
-     * @returns true if comparator(a, b) > 0, else false
-     */
-    hasPriority(a: T, b: T): boolean {
-        return this._comparator(a, b) > 0
+    const empty = () => count() == 0;
+
+    const capacity = () => _list.length;
+    const hasSpace = () => count() < capacity();
+    const count = (): number => _nextEmptyIndex;
+    const grow = (): boolean => {
+        // 1.1. Short circuit if cannot grow
+        if(!canGrow) return false;
+
+        // 1.2. Grow capacity
+        _list = _list.concat(new Array(capacity()));
+        return true;
     }
 
     /**
      * Call after this.pop() to check if the Heap has grown but is now mostly empty
      */
-    cleanHeap() {
-        const hasGrown: boolean = this.size() > this._initialCapacity;
-        const halfIndex: number = this.size() / 2;
-        const isHalfEmpty: boolean = this._nextLeafIndex <= halfIndex;
-        if(hasGrown && isHalfEmpty) this._list = this._list.slice(0, halfIndex)
+    const _cleanHeap = () => {
+        const canShrink: boolean = capacity() > _initialCapacity;
+        const halfIndex: number = capacity() / 2;
+        const isHalfEmpty: boolean = _nextEmptyIndex <= halfIndex;
+        if(canShrink && isHalfEmpty) _list = _list.slice(0, halfIndex)
     }
 
-    /**
-     * 
-     * @param item 
-     * @returns True if pushed into Heap, else false
-     *              (in the case that the heap is full, was configured to not grow,
-     *                  and the current item did not have priority over the last leaf in the Heap)
-     */
-    push(item: T): boolean {
-        const hasSpace: boolean = this.hasSpace();
-        const hasPriority: boolean = this._comparator(item, this._getLastLeafNode()!) > 0;
-        if (hasSpace || hasPriority) this._setLastLeafNode(item);
+    const _assignLMLeaf = (kv: HeapKV<K, V>): number => {
+        const index: number = _nextEmptyIndex;
+        _list[index] = kv;
 
-        this._bubbleUp(this._nextLeafIndex);
+        _nextEmptyIndex++;
 
-        this._incLastLeaf();
-
-        return hasSpace || hasPriority;
+        return index;
     }
 
-    peek(): T | undefined {
-        return this._list[0];
+    const _pluckLMLeaf = (): HeapKV<K, V> => {
+        const leftMostLeafIndex: number = _nextEmptyIndex - 1;
+        const lmLeaf: HeapKV<K, V> = _list[leftMostLeafIndex]
+        delete _list[leftMostLeafIndex];
+
+        _nextEmptyIndex--;
+
+        return lmLeaf;
     }
 
-    pop(): T | undefined {
-        if(this._nextLeafIndex == 0) return undefined;
+    // BUBBLE UP/ TRICKLE DOWN UTILS
 
-        // 1. Save top element
-        const item: T | undefined = this.peek();
+    const _bubbleUp = (index: number): void => {
+        // 1. Is the only node in the Heap, so short circuit
+        if(index <= 0) return;
+        
+        const childNode: HeapKV<K, V> = _list[index];
+        const parentNode: HeapKV<K, V> = _getParent(index);
 
-        // 2. Find last leaf that is not undefined
-        let lastIndex: number = this._nextLeafIndex;
+        const childHasPriority: boolean = _hasPriority(childNode.key, parentNode.key);
+        if(childHasPriority) {
+            const parentIndex: number = _getParentIndex(index);
 
-        while (lastIndex >= 0 && this._list[lastIndex] == undefined) lastIndex--;
-
-        // 3. Swap top with last leaf
-        this._swap(0, lastIndex);
-        // 4. Remove last leaf (the popped root)
-        delete this._list[lastIndex];
-        this._decLastLeaf();
-
-        // 5. Reorder heap
-        this._bubbleDown(0);
-
-        this.cleanHeap();
-
-        return item;
+            _swap(parentIndex, index);
+            _bubbleUp(parentIndex);
+        }
     }
 
-    _setLastLeafNode(item: T): void {
-        this._list[this._nextLeafIndex] = item;
-    }
+    const _trickleDown = (index: number) => {
+        // 1. Get left and right children
+        const leftChild: HeapKV<K, V> = _getLeftChild(index);
+        const rightChild: HeapKV<K, V> = _getRightChild(index);
 
-    _getLastLeafNode(): T | undefined {
-        return this._list[this._nextLeafIndex];
-    }
-
-    _bubbleDown(parentIndex: number): void {
-        const leftChild: T | undefined = this._getLeftChild(parentIndex);
-        const rightChild: T | undefined = this._getRightChild(parentIndex);
-
-        // 1. Is a leaf node
+        // 2. Is a leaf node, so short circuit
         if (leftChild === undefined && rightChild === undefined) return;
-
-        // 2. Choose direction to bubble down
+        
+        // 3. Choose direction to bubble down
         let largerChildIndex: number;
-        if (leftChild === undefined) largerChildIndex = this._getRightChildIndex(parentIndex);
-        else if (rightChild === undefined) largerChildIndex = this._getLeftChildIndex(parentIndex);
-        // else largerChildIndex = this._comparator(leftChild, rightChild) > 0 ? this._getLeftChildIndex(parentIndex) : this._getRightChildIndex(parentIndex);
-        else largerChildIndex = this._comparator(leftChild, rightChild) > 0 ? this._getLeftChildIndex(parentIndex) : this._getRightChildIndex(parentIndex);
 
-        // 3. Check if should bubble down
-        const parentNode: T | undefined = this._list[parentIndex];
-        const largerChild: T | undefined = this._list[largerChildIndex];
-        if (!parentNode || !largerChild) return;
+        // 3.1. Left child undefined, so check right
+        if(leftChild == undefined) largerChildIndex = _getRightChildIndex(index);
+        // 3.2. Right child undefined, so check left
+        else if(rightChild == undefined) largerChildIndex = _getLeftChildIndex(index);
+        // 3.3. Compare left vs right children to determine larger child
+        else largerChildIndex = _hasPriority(leftChild.key, rightChild.key) ? _getLeftChildIndex(index) : _getRightChildIndex(index);
 
-        // 4. Parent is smaller than larger child
-        const lessThanChild: boolean = this._comparator(parentNode, largerChild) < 0;
-        if (lessThanChild) {
-            this._swap(parentIndex, largerChildIndex);
-            this._bubbleDown(largerChildIndex);
+        // 4. Get Heap nodes corresponding to the current indexes
+        const largerChildNode: HeapKV<K, V> = _list[largerChildIndex];
+        const parentNode: HeapKV<K, V> = _list[index];
+
+        // 5. Parent does not exist, so short circuitf
+        if(!parentNode) {
+            console.log('Parent does not exist')
+            console.log('Short circuiting');
+            console.log(index);
+            console.log(parentNode);
+            console.log(largerChildIndex);
+            console.log(largerChildNode);
+            return;
+        }
+        
+        const childHasPriority: boolean = _hasPriority(largerChildNode.key, parentNode.key);
+        if(childHasPriority) {
+            _swap(largerChildIndex, index);
+            _trickleDown(largerChildIndex);
         }
     }
 
-    _bubbleUp(childIndex: number): void {
-        if (childIndex === 0) return;
+    const _swap = (parentIndex: number, childIndex: number): void => {
+        const temp: HeapKV<K, V> = _list[parentIndex];
 
-        const childNode: T | undefined = this._list[childIndex];
-        const parentNode: T | undefined = this._getParent(childIndex);
-
-        if (!childNode || !parentNode) return;
-
-        const greaterThanParent: boolean = this._comparator(childNode, parentNode) > 0;
-        if (greaterThanParent) {
-            const parentIndex: number = this._getParentIndex(childIndex);
-            this._swap(childIndex, parentIndex);
-            this._bubbleUp(parentIndex);
-        }
+        _list[parentIndex] = _list[childIndex];
+        _list[childIndex] = temp;
     }
 
-    _swap(i1: number, i2: number): void {
-        const temp: T | undefined = this._list[i1];
-        this._list[i1] = this._list[i2];
-        this._list[i2] = temp;
-    }
+    const _hasPriority = (childKey: K, parentKey: K): boolean => comparator(childKey, parentKey) > 0;
 
-    _incLastLeaf(): number {
-        // 1. Check if full
-        if (this._nextLeafIndex >= this.size() - 1) {
-            // 2. Double capacity
-            if (this._canGrow) {
-                this._list = this._list.concat(new Array(this.size()));
-
-                this._nextLeafIndex++;
-            }
-        }
-        // 2. Inc last leaf index
-        else {
-            this._nextLeafIndex++;
-        }
-
-        return this._nextLeafIndex;
-    }
-
-    _decLastLeaf() {
-        this._nextLeafIndex--;
-        return this._nextLeafIndex;
-    }
-
-    _getLeftChildIndex(parentIndex: number): number {
+    // CHILD/ PARENT UTILS
+    
+    const _getLeftChildIndex = (parentIndex: number): number => {
         return parentIndex * 2 + 1;
     }
+    const _getLeftChild = (parentIndex: number): HeapKV<K, V> | undefined => {
+        return _list[_getLeftChildIndex(parentIndex)];
+    }
 
-    _getRightChildIndex(parentIndex: number): number {
+    const _getRightChildIndex = (parentIndex: number): number => {
         return parentIndex * 2 + 2;
     }
-
-    _getLeftChild(parentIndex: number): T | undefined {
-        return this._list[this._getLeftChildIndex(parentIndex)];
+    const _getRightChild = (parentIndex: number): HeapKV<K, V> | undefined => {
+        return _list[_getRightChildIndex(parentIndex)];
     }
 
-    _getRightChild(parentIndex: number): T | undefined {
-        return this._list[this._getRightChildIndex(parentIndex)];
-    }
-
-    _getParentIndex(childIndex: number): number {
+    const _getParentIndex = (childIndex: number): number => {
         return Math.floor((childIndex - 1) / 2);
     }
-
-    _getParent(childIndex: number): T | undefined {
-        return this._list[this._getParentIndex(childIndex)];
+    const _getParent = (childIndex: number): HeapKV<K, V> | undefined => {
+        return _list[_getParentIndex(childIndex)];
     }
+
+
+    const heap: Heap<K, V> = {
+        push,
+        pop,
+
+        getListCopy,
+        empty,
+        hasSpace,
+        capacity,
+        count,
+    };
+    
+    return heap;
 }

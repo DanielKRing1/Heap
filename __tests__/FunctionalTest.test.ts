@@ -1,16 +1,17 @@
-import Heap from '../src';
+import { createHeap, Heap } from '../src';
 
 describe("Heaps labeled to grow", () => {
     it("Should grow when pushed and shrink when popped", () => {
-        const maxHeap: Heap<number> = new Heap((a, b) => b - a, 8, true);
+        const maxHeap: Heap<number, number> = createHeap((a, b) => b - a, 8, true);
         for (let i = 0; i < 20; i++) {
-            maxHeap.push(Math.random() * 10);
+            const randNum: number = Math.random() * 10;
+            maxHeap.push({ key: randNum, value: randNum });
             // console.log(maxHeap._list);
             // console.log(maxHeap._lastLeaf);
         }
         // console.log(maxHeap._list);
 
-        expect(maxHeap._list.length).toBe(32);
+        expect(maxHeap.getListCopy().length).toBe(32);
         
 
         // console.log(maxHeap.pop());
@@ -35,16 +36,17 @@ describe("Heaps labeled to grow", () => {
         // CHECK THIS 10 TIMES (SOME CASES MAY PASS AND FAIL OTHER TIMES, GIVEN THE TET INPUT)
         for(let iterations = 0; iterations < 10; iterations++) {
 
-            const maxHeap: Heap<number> = new Heap((a, b) => a - b, 8, true);
+            const maxHeap: Heap<number, number> = createHeap((a, b) => a - b, 8, true);
 
             for (let i = 0; i < 20; i++) {
-                maxHeap.push(Math.random() * 10);
+                const randNum: number = Math.random() * 10;
+                maxHeap.push({ key: randNum, value: randNum });
                 // console.log(maxHeap._list);
                 // console.log(maxHeap._lastLeaf);
             }
             // console.log(maxHeap._list);
             
-            expect(maxHeap._list.length).toBe(32);
+            expect(maxHeap.getListCopy().length).toBe(32);
             
             
             // console.log(maxHeap.pop());
@@ -75,39 +77,41 @@ describe("Heaps labeled to grow", () => {
     });
 
     it("Should be able to grow again again, even after shrinking", () => {
-        const maxHeap: Heap<number> = new Heap((a, b) => b - a, 8, true);
+        const maxHeap: Heap<number, number> = createHeap((a, b) => b - a, 8, true);
 
         for(let iterations = 0; iterations < 10; iterations++) {
 
             // console.log(maxHeap.size());
             for (let i = 0; i < 20; i++) {
-                maxHeap.push(Math.random() * 10);
+                const randNum: number = Math.random() * 10;
+                maxHeap.push({ key: randNum, value: randNum });
                 // console.log(maxHeap._nextLeafIndex);
                 // console.log(maxHeap.size());
             }
             
-            expect(maxHeap._list.length).toBe(32);
+            expect(maxHeap.getListCopy().length).toBe(32);
             
             for (let i = 0; i < 26; i++) {
                 maxHeap.pop();
             }
 
-            expect(maxHeap._list.length).toBe(8);
+            expect(maxHeap.getListCopy().length).toBe(8);
         }
     });
 });
 
 describe("Heaps labeled not to grow", () => {
     it("Should not grow when pushed pasted its limit and stay the same size when popped", () => {
-        const maxHeap: Heap<number> = new Heap((a, b) => b - a, 8, false);
+        const maxHeap: Heap<number, number> = createHeap((a, b) => b - a, 8, false);
         for (let i = 0; i < 20; i++) {
-            maxHeap.push(Math.random() * 10);
+            const randNum: number = Math.random() * 10;
+            maxHeap.push({ key: randNum, value: randNum });
             // console.log(maxHeap._list);
             // console.log(maxHeap._lastLeaf);
         }
         // console.log(maxHeap._list);
 
-        expect(maxHeap._list.length).toBe(8);
+        expect(maxHeap.getListCopy().length).toBe(8);
         
 
         // console.log(maxHeap.pop());
@@ -132,16 +136,17 @@ describe("Heaps labeled not to grow", () => {
         // CHECK THIS 10 TIMES (SOME CASES MAY PASS AND FAIL OTHER TIMES, GIVEN THE TET INPUT)
         for(let iterations = 0; iterations < 10; iterations++) {
 
-            const maxHeap: Heap<number> = new Heap((a, b) => a - b, 8, false);
+            const maxHeap: Heap<number, number> = createHeap((a, b) => a - b, 8, false);
 
             for (let i = 0; i < 20; i++) {
-                maxHeap.push(Math.random() * 10);
+                const randNum: number = Math.random() * 10;
+                maxHeap.push({ key: randNum, value: randNum });
                 // console.log(maxHeap._list);
                 // console.log(maxHeap._lastLeaf);
             }
             // console.log(maxHeap._list);
             
-            expect(maxHeap._list.length).toBe(8);
+            expect(maxHeap.getListCopy().length).toBe(8);
             
             
             // console.log(maxHeap.pop());
